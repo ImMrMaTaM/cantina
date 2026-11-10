@@ -231,7 +231,7 @@ function cercaView() {
 const TIPO_LABEL = { carico_iniziale: 'Carico iniziale', acquisto: 'Acquisto', trasferimento: 'Trasferimento', consumo: 'Bevuta', rettifica: 'Rettifica' };
 const STATO_LABEL = { pianificato: 'Pianificato', in_corso: 'In corso', confermato: 'Confermato', annullato: 'Annullato' };
 function movLine(m) {
-  const da = m.da_location_id ? L.get(m.da_location_id)?.nome : (m.fornitore || (m.tipo === 'rettifica' ? 'rettifica' : ''));
+  const da = m.da_location_id ? L.get(m.da_location_id)?.nome : (m.fornitore || ({ rettifica: 'rettifica', carico_iniziale: 'Excel' }[m.tipo] || ''));
   const a = m.a_location_id ? L.get(m.a_location_id)?.nome : (m.tipo === 'consumo' ? 'bevuta' : 'uscita');
   return `${esc(da || '?')} → ${esc(a || '?')}`;
 }
@@ -545,7 +545,8 @@ async function exportXlsx() {
   const tail = (w) => [w.dw_inizio, w.dw_fine, dwState(w), w.fonte_dw, w.bere_presto ? 'Sì' : ''];
   S.giac.filter((g) => g.qty > 0).forEach((g) => { const w = W.get(g.wine_id); const l = L.get(g.location_id);
     rows.push([g.qty, ...base(w), l?.nome, l?.tipo === 'sconosciuta' || segnKey.has(`${g.wine_id}|${g.location_id}`) ? 'Da verificare' : 'In posizione', null, null, ...tail(w)]); });
-  openMovs().forEach((m) => { const w = W.get(m.wine_id);
+  // i pianificati sono ancora fisicamente nell'origine: già contati nelle giacenze, li trovi nel foglio Movimenti
+  openMovs().filter((m) => m.stato === 'in_corso').forEach((m) => { const w = W.get(m.wine_id);
     rows.push([m.qty, ...base(w), m.da_location_id ? L.get(m.da_location_id)?.nome : null, m.tipo === 'acquisto' ? 'In consegna' : m.stato === 'pianificato' ? 'Pianificato' : 'In transito', L.get(m.a_location_id)?.nome, m.fornitore, ...tail(w)]); });
   rows.sort((a, b) => String(a[2]).localeCompare(String(b[2])) || String(a[3]).localeCompare(String(b[3])));
   const ws1 = XLSX.utils.aoa_to_sheet([head, ...rows]); ws1['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: head.length - 1 } }) };
