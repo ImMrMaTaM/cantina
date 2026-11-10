@@ -1,0 +1,7 @@
+{
+  "name": "cantina",
+  "private": true,
+  "scripts": { "build": "esbuild src/main.js --bundle --minify --format=iife --target=es2020 --outfile=app.js && cp src/index.html index.html" },
+  "dependencies": { "@supabase/supabase-js": "^2.119.0", "xlsx": "^0.18.5" },
+  "devDependencies": { "esbuild": "*" }
+}
