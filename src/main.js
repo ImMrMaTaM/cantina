@@ -69,9 +69,19 @@ const TIPCLS = { Rossi: 'r', Bianchi: 'b', Bollicine: 'f', Rosati: 'p', Dolci: '
 const tipDot = (w) => `<span class="dot ${TIPCLS[tipKey(w)]}"></span>`;
 const wineTitle = (w) => `${w.produttore} · ${w.vino}`;
 const isSparkling = (w) => w?.stile === 'Bollicine';
-const fmtSb = (d) => (d ? `${d.slice(5, 7)}/${d.slice(0, 4)}` : '');
-const wineSub = (w) => [w.annata, w.denominazione, w.formato !== '750ml' ? w.formato : null, w.sboccatura ? `sb. ${fmtSb(w.sboccatura)}` : null].filter(Boolean).join(' · ');
-const wineShort = (w) => `${w.vino.startsWith(w.produttore) ? w.vino : w.produttore + ' ' + w.vino} ${w.annata}${w.sboccatura ? ` (sb. ${fmtSb(w.sboccatura)})` : ''}`;
+const fmtSb = (w) => (!w?.sboccatura ? '' : w.sboccatura_precisione === 'anno' ? w.sboccatura.slice(0, 4) : `${w.sboccatura.slice(5, 7)}/${w.sboccatura.slice(0, 4)}`);
+/* "2026" = solo anno, "03/2026" o "2026-03" = mese e anno */
+function parseSb(v) {
+  v = String(v || '').trim();
+  let m;
+  if (!v) return { sboccatura: null, sboccatura_precisione: 'mese' };
+  if ((m = v.match(/^(\d{4})$/))) return { sboccatura: `${m[1]}-01-01`, sboccatura_precisione: 'anno' };
+  if ((m = v.match(/^(\d{1,2})[\/.-](\d{4})$/))) return { sboccatura: `${m[2]}-${m[1].padStart(2, '0')}-01`, sboccatura_precisione: 'mese' };
+  if ((m = v.match(/^(\d{4})-(\d{2})/))) return { sboccatura: `${m[1]}-${m[2]}-01`, sboccatura_precisione: 'mese' };
+  return { error: true };
+}
+const wineSub = (w) => [w.annata, w.denominazione, w.formato !== '750ml' ? w.formato : null, w.sboccatura ? `sb. ${fmtSb(w)}` : null].filter(Boolean).join(' · ');
+const wineShort = (w) => `${w.vino.startsWith(w.produttore) ? w.vino : w.produttore + ' ' + w.vino} ${w.annata}${w.sboccatura ? ` (sb. ${fmtSb(w)})` : ''}`;
 function whereLine(wid) {
   const st = stockOfWine(wid).slice().sort((a, b) => byOrder(L.get(a.location_id), L.get(b.location_id)));
   return st.map((g) => `${L.get(g.location_id)?.nome} ${g.qty}`).join(' · ');
@@ -425,7 +435,7 @@ function wineView(v) {
     <section class="card kv">
       <div><span>Finestra</span><b>${w.dw_inizio || '?'} – ${w.dw_fine || '?'}</b> <span class="chip c-${k}">${DW[k]}</span></div>
       ${w.fonte_dw ? `<div><span>Fonte</span><p>${esc(w.fonte_dw)}</p></div>` : ''}
-      ${isSparkling(w) ? `<div><span>Sboccatura</span><p>${w.sboccatura ? fmtSb(w.sboccatura) : '<b>da inserire</b>: guarda la controetichetta, poi "Modifica dati"'}</p></div>` : ''}
+      ${isSparkling(w) ? `<div><span>Sboccatura</span><p>${w.sboccatura ? `${fmtSb(w)}${w.sboccatura_precisione === 'anno' ? ' (solo anno)' : ''}` : '<b>da inserire</b>: guarda la controetichetta, poi "Modifica dati"'}</p></div>` : ''}
       <div><span>Finestra controllata</span><p>${w.dw_controllata_il ? fmtDate(w.dw_controllata_il) : 'non ancora'}</p></div>
       ${pr != null ? `<div><span>Prezzo medio</span><b>${fmtEur(pr)}</b></div>` : ''}
       ${w.note ? `<div><span>Note</span><p>${esc(w.note)}</p></div>` : ''}
@@ -589,7 +599,7 @@ function renderSheet() {
           <label>Dove le hai trovate<select name="to" required>${destOptions('')}</select></label>
           <label>Nota<input name="nota" placeholder="facoltativa"></label>
           <button class="primary" type="submit">Registra</button>`
-        : `${pick && isSparkling(pick) ? `<label>Sboccatura di queste bottiglie<input name="sb_lotto" type="month" value="${pick.sboccatura ? pick.sboccatura.slice(0, 7) : ''}"></label>
+        : `${pick && isSparkling(pick) ? `<label>Sboccatura di queste bottiglie (MM/AAAA o AAAA)<input name="sb_lotto" inputmode="numeric" placeholder="MM/AAAA o AAAA" value="${esc(fmtSb(pick))}"></label>
           <p class="note">Se è diversa da quella in cantina, creo un vino separato con la sua finestra.</p>` : ''}
           <div class="grid2"><label>Bottiglie<input name="qty" type="number" inputmode="numeric" min="1" value="1" required></label>
           <label>Prezzo cad. €<input name="prezzo" type="number" inputmode="decimal" step="0.01" min="0"></label></div>
@@ -637,7 +647,7 @@ function wineFields(w) {
     ${f('denominazione', 'Denominazione')}
     <div class="grid2">${f('regione', 'Regione')}${f('paese', 'Paese')}</div>
     ${f('vitigno', 'Vitigno')}
-    <label>Sboccatura (spumanti, mese e anno)<input name="sboccatura" type="month" value="${w.sboccatura ? w.sboccatura.slice(0, 7) : ''}"></label>
+    <label>Sboccatura (spumanti): 03/2026, oppure solo 2026<input name="sboccatura" inputmode="numeric" placeholder="MM/AAAA o AAAA" value="${esc(fmtSb(w))}"></label>
     <div class="grid2">${f('dw_inizio', 'Inizio finestra', 'type="number" inputmode="numeric"')}${f('dw_fine', 'Fine finestra', 'type="number" inputmode="numeric"')}</div>
     ${f('fonte_dw', 'Fonte finestra')}`;
 }
@@ -648,7 +658,7 @@ function readWine(fd) {
     produttore: g('produttore'), vino: g('vino'), annata: (g('annata') || '').toUpperCase(), formato: g('formato') || '750ml',
     tipologia: g('tipologia'), stile: g('stile'), denominazione: g('denominazione'), regione: g('regione'), paese: g('paese'),
     vitigno: g('vitigno'), dw_inizio: int('dw_inizio'), dw_fine: int('dw_fine'), fonte_dw: g('fonte_dw'),
-    sboccatura: g('sboccatura') ? `${g('sboccatura').slice(0, 7)}-01` : null,
+    ...(() => { const r = parseSb(g('sboccatura')); return r.error ? { sboccatura: undefined } : r; })(),
   };
 }
 
@@ -704,15 +714,17 @@ async function submitSheet(form) {
     let wid = s.pick || s.wid;
     const lot = (fd.get('sb_lotto') || '').toString();
     if (wid && lot) {
-      const p = W.get(wid); const sbDate = `${lot.slice(0, 7)}-01`;
+      const p = W.get(wid); const r = parseSb(lot);
+      if (r.error) return toast('Sboccatura: scrivi 03/2026 oppure 2026');
+      const sbDate = r.sboccatura;
       if (!p.sboccatura && totalWine(wid) === 0 && !openMovsOfWine(wid).length) {
-        if (!(await run(sb.from('wines').update({ sboccatura: sbDate }).eq('id', wid)))) return;
-      } else if (p.sboccatura !== sbDate) {
+        if (!(await run(sb.from('wines').update(r).eq('id', wid)))) return;
+      } else if (p.sboccatura !== sbDate || (p.sboccatura_precisione || 'mese') !== r.sboccatura_precisione) {
         const same = S.wines.find((x) => x.produttore === p.produttore && x.vino === p.vino && x.annata === p.annata && x.formato === p.formato && x.sboccatura === sbDate);
         if (same) wid = same.id;
         else {
           const { id, created_at, updated_at, dw_inizio, dw_fine, fonte_dw, dw_controllata_il, bere_presto, ...base } = p;
-          const { data, error } = await sb.from('wines').insert({ ...base, sboccatura: sbDate }).select('id').single();
+          const { data, error } = await sb.from('wines').insert({ ...base, ...r }).select('id').single();
           if (error) return toast(errMsg(error));
           wid = data.id; s.newRow = true;
         }
@@ -720,6 +732,7 @@ async function submitSheet(form) {
     }
     if (!wid) {
       const nw = readWine(fd);
+      if (nw.sboccatura === undefined) return toast('Sboccatura: scrivi 03/2026 oppure 2026');
       const { data, error } = await sb.from('wines').insert(nw).select('id').single();
       if (error) return toast(errMsg(error));
       wid = data.id;
@@ -728,7 +741,9 @@ async function submitSheet(form) {
     ok = await run(sb.from('movimenti').insert({ wine_id: wid, tipo: 'acquisto', qty: num('qty'), a_location_id: num('to'), stato: fd.get('stato'), fornitore: (fd.get('fornitore') || '').toString().trim() || null, prezzo_unitario: prezzo, nota }), 'Acquisto registrato');
     if (ok && (!s.wid || s.newRow)) { closeSheet(); await loadAll(); if (s.newRow) toast('Nuova sboccatura: creato un vino separato, dagli una finestra'); return go({ name: 'wine', id: wid }); }
   } else if (s.kind === 'editwine') {
-    const upd = { ...readWine(fd), bere_presto: fd.get('bere_presto') === 'on', note: (fd.get('note') || '').toString().trim() || null };
+    const rw = readWine(fd);
+    if (rw.sboccatura === undefined) return toast('Sboccatura: scrivi 03/2026 oppure 2026');
+    const upd = { ...rw, bere_presto: fd.get('bere_presto') === 'on', note: (fd.get('note') || '').toString().trim() || null };
     const w0 = W.get(s.wid);
     if (upd.dw_inizio !== w0.dw_inizio || upd.dw_fine !== w0.dw_fine || upd.fonte_dw !== w0.fonte_dw) upd.dw_controllata_il = new Date().toISOString().slice(0, 10);
     ok = await run(sb.from('wines').update(upd).eq('id', s.wid), 'Salvato');
@@ -752,7 +767,7 @@ async function exportXlsx() {
   const rows = [];
   const segnKey = new Set(segnOpen().map((s) => `${s.wine_id}|${s.location_id}`));
   const base = (w) => { const p = avgPrice(w.id); return [w.vino, w.produttore, w.annata, w.denominazione, w.regione, w.paese, w.tipologia, w.stile, w.vitigno, w.formato, p == null ? null : Math.round(p * 100) / 100]; };
-  const tail = (w) => [w.sboccatura ? fmtSb(w.sboccatura) : null, w.dw_inizio, w.dw_fine, DW[dwKey(w)], w.fonte_dw, w.dw_controllata_il];
+  const tail = (w) => [w.sboccatura ? fmtSb(w) : null, w.dw_inizio, w.dw_fine, DW[dwKey(w)], w.fonte_dw, w.dw_controllata_il];
   const grp = (l) => (l?.parent_id ? L.get(l.parent_id)?.nome : null);
   S.giac.filter((g) => g.qty > 0).forEach((g) => { const w = W.get(g.wine_id); const l = L.get(g.location_id);
     rows.push([g.qty, ...base(w), grp(l), l?.nome, l?.tipo === 'sconosciuta' || segnKey.has(`${g.wine_id}|${g.location_id}`) ? 'Da verificare' : 'In posizione', null, null, ...tail(w)]); });
