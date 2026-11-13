@@ -1,5 +1,5 @@
 // Service worker minimo: rete prima, copia locale solo per i file dell'app quando si è offline.
-const C = 'cantina-v1';
+const C = 'cantina-v2';
 self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', (e) => {
