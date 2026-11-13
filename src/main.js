@@ -421,6 +421,7 @@ function wineView(v) {
     <section class="card kv">
       <div><span>Finestra</span><b>${w.dw_inizio || '?'} – ${w.dw_fine || '?'}</b> <span class="chip c-${k}">${DW[k]}</span></div>
       ${w.fonte_dw ? `<div><span>Fonte</span><p>${esc(w.fonte_dw)}</p></div>` : ''}
+      <div><span>Finestra controllata</span><p>${w.dw_controllata_il ? fmtDate(w.dw_controllata_il) : 'non ancora'}</p></div>
       ${pr != null ? `<div><span>Prezzo medio</span><b>${fmtEur(pr)}</b></div>` : ''}
       ${w.note ? `<div><span>Note</span><p>${esc(w.note)}</p></div>` : ''}
     </section>
@@ -703,6 +704,8 @@ async function submitSheet(form) {
     if (ok && !s.wid) { closeSheet(); await loadAll(); return go({ name: 'wine', id: wid }); }
   } else if (s.kind === 'editwine') {
     const upd = { ...readWine(fd), bere_presto: fd.get('bere_presto') === 'on', note: (fd.get('note') || '').toString().trim() || null };
+    const w0 = W.get(s.wid);
+    if (upd.dw_inizio !== w0.dw_inizio || upd.dw_fine !== w0.dw_fine || upd.fonte_dw !== w0.fonte_dw) upd.dw_controllata_il = new Date().toISOString().slice(0, 10);
     ok = await run(sb.from('wines').update(upd).eq('id', s.wid), 'Salvato');
   } else if (s.kind === 'membro') {
     ok = await run(sb.from('membri').insert({ email: fd.get('email').toString().trim().toLowerCase(), nome: (fd.get('nome') || '').toString().trim() || null }), 'Persona aggiunta');
@@ -720,11 +723,11 @@ async function submitSheet(form) {
 
 async function exportXlsx() {
   const wb = XLSX.utils.book_new();
-  const head = ['Quantità', 'Vino', 'Produttore', 'Annata', 'Denominazione', 'Regione', 'Paese', 'Tipologia', 'Stile', 'Vitigno', 'Formato', 'Prezzo medio (€)', 'Gruppo', 'Location', 'Stato', 'Destinazione', 'Fornitore', 'Inizio DW', 'Fine DW', 'Stato DW', 'Fonte DW'];
+  const head = ['Quantità', 'Vino', 'Produttore', 'Annata', 'Denominazione', 'Regione', 'Paese', 'Tipologia', 'Stile', 'Vitigno', 'Formato', 'Prezzo medio (€)', 'Gruppo', 'Location', 'Stato', 'Destinazione', 'Fornitore', 'Inizio DW', 'Fine DW', 'Stato DW', 'Fonte DW', 'DW controllata il'];
   const rows = [];
   const segnKey = new Set(segnOpen().map((s) => `${s.wine_id}|${s.location_id}`));
   const base = (w) => { const p = avgPrice(w.id); return [w.vino, w.produttore, w.annata, w.denominazione, w.regione, w.paese, w.tipologia, w.stile, w.vitigno, w.formato, p == null ? null : Math.round(p * 100) / 100]; };
-  const tail = (w) => [w.dw_inizio, w.dw_fine, DW[dwKey(w)], w.fonte_dw];
+  const tail = (w) => [w.dw_inizio, w.dw_fine, DW[dwKey(w)], w.fonte_dw, w.dw_controllata_il];
   const grp = (l) => (l?.parent_id ? L.get(l.parent_id)?.nome : null);
   S.giac.filter((g) => g.qty > 0).forEach((g) => { const w = W.get(g.wine_id); const l = L.get(g.location_id);
     rows.push([g.qty, ...base(w), grp(l), l?.nome, l?.tipo === 'sconosciuta' || segnKey.has(`${g.wine_id}|${g.location_id}`) ? 'Da verificare' : 'In posizione', null, null, ...tail(w)]); });
